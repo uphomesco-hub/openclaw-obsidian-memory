@@ -6,6 +6,7 @@ It gives OpenClaw two simple abilities:
 
 - Capture: save pasted text, links, articles, GitHub repos, journal notes, ideas, and project notes into an Obsidian vault.
 - Recall: search the vault before answering memory-style questions.
+- Wiki maintenance: build a persistent LLM-maintained wiki from raw sources, with source pages, concept pages, project pages, `wiki/index.md`, and `wiki/log.md`.
 
 The vault stays normal Markdown. You can open it in Obsidian, sync it, edit it manually, or back it up like any other folder.
 
@@ -51,7 +52,23 @@ Folders created by the bridge:
 05-Ideas/
 06-Decisions/
 90-System/
+raw/
+  sources/
+  assets/
+wiki/
+  index.md
+  log.md
+  AGENTS.md
+  sources/
+  concepts/
+  entities/
+  projects/
+  syntheses/
+  questions/
+  reports/
 ```
+
+`raw/` is the immutable evidence layer. `wiki/` is the LLM-maintained compiled knowledge layer.
 
 ## Install
 
@@ -97,6 +114,18 @@ Search memory:
 ~/.openclaw/tools/openclaw-obsidian search "what did I save about browser automation"
 ```
 
+Ask a durable question and file it in the wiki:
+
+```bash
+~/.openclaw/tools/openclaw-obsidian query "what do I know about browser automation"
+```
+
+Health-check the wiki:
+
+```bash
+~/.openclaw/tools/openclaw-obsidian lint
+```
+
 Crawl and save a webpage:
 
 ```bash
@@ -134,6 +163,8 @@ Add the contents of [`docs/openclaw-instructions.md`](docs/openclaw-instructions
 ```text
 ~/.openclaw/workspace/AGENTS.md
 ```
+
+The user-facing workflow is plain English. The commands above are for OpenClaw/agents internally.
 
 ## Test The Setup
 

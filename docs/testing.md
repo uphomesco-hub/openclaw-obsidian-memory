@@ -46,6 +46,26 @@ openclaw-obsidian search "shell-test-keyword-123"
 
 Expected: one result with a path under the vault and an excerpt containing the keyword.
 
+## 3b. Test LLM Wiki Files
+
+After capture, the bridge should also create raw/wiki files:
+
+```bash
+tmp_vault="$(mktemp -d)"
+OPENCLAW_OBSIDIAN_VAULT="$tmp_vault" openclaw-obsidian capture "save this to Obsidian: wiki-layer-test-keyword for project memory"
+find "$tmp_vault" -maxdepth 3 -type f | sort
+rm -rf "$tmp_vault"
+```
+
+Expected files include:
+
+```text
+raw/sources/...
+wiki/sources/...
+wiki/index.md
+wiki/log.md
+```
+
 ## 4. Test Slash Command From OpenClaw Chat
 
 Send OpenClaw:
@@ -166,3 +186,21 @@ Vault: ready
 Render mode: obsidian
 Wiki doctor: healthy
 ```
+
+## 10. Test Plain-English Query And Health Check
+
+These are internal tools OpenClaw can call when you ask in normal language:
+
+```bash
+tmp_vault="$(mktemp -d)"
+OPENCLAW_OBSIDIAN_VAULT="$tmp_vault" openclaw-obsidian capture "save this to Obsidian: query-test-keyword belongs to a durable wiki"
+OPENCLAW_OBSIDIAN_VAULT="$tmp_vault" openclaw-obsidian query "what do I know about query-test-keyword"
+OPENCLAW_OBSIDIAN_VAULT="$tmp_vault" openclaw-obsidian lint
+rm -rf "$tmp_vault"
+```
+
+Expected:
+
+- `query` creates a page under `wiki/questions/`
+- `lint` creates a report under `wiki/reports/`
+- `wiki/index.md` and `wiki/log.md` are updated

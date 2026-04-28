@@ -40,6 +40,55 @@ TYPE_DIRS = {
     "inbox": "00-Inbox",
 }
 
+WIKI_DIRS = [
+    "raw/sources",
+    "raw/assets",
+    "wiki/entities",
+    "wiki/concepts",
+    "wiki/projects",
+    "wiki/sources",
+    "wiki/syntheses",
+    "wiki/questions",
+    "wiki/reports",
+]
+
+STOPWORDS = {
+    "about",
+    "after",
+    "again",
+    "also",
+    "and",
+    "are",
+    "because",
+    "been",
+    "before",
+    "but",
+    "can",
+    "could",
+    "from",
+    "have",
+    "into",
+    "later",
+    "like",
+    "memory",
+    "note",
+    "obsedian",
+    "obsidian",
+    "openclaw",
+    "should",
+    "that",
+    "the",
+    "then",
+    "there",
+    "this",
+    "what",
+    "when",
+    "where",
+    "with",
+    "would",
+    "your",
+}
+
 PROJECT_KEYWORDS = {
     "uphomes": ["uphomes", "broker", "rental", "property", "kharadi", "pune"],
     "openclaw": ["openclaw", "open claw", "telegram", "gateway", "launchd"],
@@ -81,6 +130,54 @@ def ensure_vault(vault: Path) -> None:
         (vault / rel).mkdir(parents=True, exist_ok=True)
     index = vault / SYSTEM_DIR / INDEX_FILE
     index.touch(exist_ok=True)
+
+
+def ensure_llm_wiki(vault: Path) -> None:
+    ensure_vault(vault)
+    for rel in WIKI_DIRS:
+        (vault / rel).mkdir(parents=True, exist_ok=True)
+
+    wiki_index = vault / "wiki" / "index.md"
+    if not wiki_index.exists():
+        wiki_index.write_text(
+            "# LLM Wiki Index\n\n"
+            "This catalog is maintained by OpenClaw. It lists source pages, concepts, entities, projects, questions, syntheses, and reports.\n\n"
+            "<!-- openclaw:index:start -->\n"
+            "No wiki pages indexed yet.\n"
+            "<!-- openclaw:index:end -->\n",
+            encoding="utf-8",
+        )
+
+    log = vault / "wiki" / "log.md"
+    if not log.exists():
+        log.write_text(
+            "# LLM Wiki Log\n\n"
+            "Append-only timeline of ingests, queries, lint passes, and maintenance work.\n\n",
+            encoding="utf-8",
+        )
+
+    schema = vault / "wiki" / "AGENTS.md"
+    if not schema.exists():
+        schema.write_text(
+            "# LLM Wiki Schema\n\n"
+            "OpenClaw maintains this wiki from plain English user requests.\n\n"
+            "## Layers\n\n"
+            "- `raw/sources/`: immutable captured sources and crawled page text.\n"
+            "- `wiki/sources/`: one page per source with summary, key terms, and links.\n"
+            "- `wiki/entities/`: people, companies, products, repos, tools, places.\n"
+            "- `wiki/concepts/`: reusable ideas, themes, and tags.\n"
+            "- `wiki/projects/`: project-level memory and running context.\n"
+            "- `wiki/syntheses/`: answers, comparisons, and analyses worth keeping.\n"
+            "- `wiki/questions/`: questions asked and investigated.\n"
+            "- `wiki/reports/`: lint and health reports.\n\n"
+            "## Maintenance Rules\n\n"
+            "- Preserve `raw/` sources as evidence. Do not rewrite them.\n"
+            "- Keep wiki pages concise, linked, and source-backed.\n"
+            "- Update `wiki/index.md` after source/wiki changes.\n"
+            "- Append to `wiki/log.md` for ingests, important queries, and lint passes.\n"
+            "- When answering a useful question, file the answer as a synthesis page if it should persist.\n",
+            encoding="utf-8",
+        )
 
 
 def slugify(value: str, fallback: str = "note") -> str:
@@ -332,6 +429,186 @@ def append_index(vault: Path, record: dict[str, object]) -> None:
         fh.write(json.dumps(record, ensure_ascii=False, sort_keys=True) + "\n")
 
 
+def append_wiki_log(vault: Path, action: str, title: str, rel_path: str | None = None) -> None:
+    ensure_llm_wiki(vault)
+    line = f"## [{today()}] {action} | {title}\n"
+    if rel_path:
+        line += f"- Path: [[{rel_path.removesuffix('.md')}]]\n"
+    line += f"- Time: {iso_now()}\n\n"
+    with (vault / "wiki" / "log.md").open("a", encoding="utf-8") as fh:
+        fh.write(line)
+
+
+def markdown_title(path: Path) -> str:
+    try:
+        for line in path.read_text(encoding="utf-8", errors="ignore").splitlines():
+            if line.startswith("# "):
+                return line[2:].strip()
+            if line.startswith("title:"):
+                return line.split(":", 1)[1].strip().strip('"')
+    except OSError:
+        pass
+    return path.stem.replace("-", " ").title()
+
+
+def first_summary_line(path: Path) -> str:
+    try:
+        raw = path.read_text(encoding="utf-8", errors="ignore")
+    except OSError:
+        return ""
+    for line in raw.splitlines():
+        stripped = line.strip()
+        if stripped and not stripped.startswith(("#", "-", "---")) and ":" not in stripped[:20]:
+            return stripped[:160]
+    return ""
+
+
+def update_wiki_index(vault: Path) -> None:
+    ensure_llm_wiki(vault)
+    sections = [
+        ("Sources", "wiki/sources"),
+        ("Entities", "wiki/entities"),
+        ("Concepts", "wiki/concepts"),
+        ("Projects", "wiki/projects"),
+        ("Syntheses", "wiki/syntheses"),
+        ("Questions", "wiki/questions"),
+        ("Reports", "wiki/reports"),
+    ]
+    lines = [
+        "# LLM Wiki Index",
+        "",
+        "This catalog is maintained by OpenClaw. It lists source pages, concepts, entities, projects, questions, syntheses, and reports.",
+        "",
+        "<!-- openclaw:index:start -->",
+    ]
+    for heading, rel_dir in sections:
+        lines.extend(["", f"## {heading}", ""])
+        pages = sorted((vault / rel_dir).glob("*.md"))
+        if not pages:
+            lines.append("- None yet.")
+            continue
+        for page in pages:
+            rel = str(page.relative_to(vault)).removesuffix(".md")
+            summary = first_summary_line(page)
+            suffix = f" - {summary}" if summary else ""
+            lines.append(f"- [[{rel}|{markdown_title(page)}]]{suffix}")
+    lines.extend(["", "<!-- openclaw:index:end -->", ""])
+    (vault / "wiki" / "index.md").write_text("\n".join(lines), encoding="utf-8")
+
+
+def top_terms(text: str, limit: int = 8) -> list[str]:
+    counts: dict[str, int] = {}
+    for token in tokenize(text):
+        if len(token) < 4 or token in STOPWORDS or token.startswith("http"):
+            continue
+        counts[token] = counts.get(token, 0) + 1
+    return [term for term, _ in sorted(counts.items(), key=lambda item: (-item[1], item[0]))[:limit]]
+
+
+def short_summary(text: str, max_chars: int = 700) -> str:
+    compact = re.sub(r"\s+", " ", text).strip()
+    if len(compact) <= max_chars:
+        return compact
+    return compact[: max_chars - 1].rsplit(" ", 1)[0].strip() + "…"
+
+
+def update_topic_page(vault: Path, folder: str, name: str, source_link: str, source_title: str) -> None:
+    if not name:
+        return
+    path = vault / "wiki" / folder / f"{slugify(name)}.md"
+    title = name.replace("-", " ").title()
+    if not path.exists():
+        path.write_text(
+            frontmatter({
+                "type": folder.rstrip("s") or "topic",
+                "title": title,
+                "created": iso_now(),
+                "tags": ["llm-wiki", folder.rstrip("s")],
+            })
+            + f"\n\n# {title}\n\n"
+            + "## Summary\n\n"
+            + "OpenClaw should maintain this page as related sources accumulate.\n\n"
+            + "## Related Sources\n\n",
+            encoding="utf-8",
+        )
+    raw = path.read_text(encoding="utf-8", errors="ignore")
+    entry = f"- [[{source_link}|{source_title}]]"
+    if entry not in raw:
+        with path.open("a", encoding="utf-8") as fh:
+            fh.write(entry + "\n")
+
+
+def create_wiki_source(
+    vault: Path,
+    record: dict[str, object],
+    clean_text: str,
+    note_path: Path,
+    crawled: dict[str, object] | None,
+) -> str:
+    ensure_llm_wiki(vault)
+    capture_id = str(record["id"])
+    title = str(record["title"])
+    source_rel = f"wiki/sources/{capture_id}-{slugify(title, 'source')}.md"
+    raw_rel = f"raw/sources/{capture_id}-{slugify(title, 'source')}.md"
+
+    source_text = str(crawled.get("text") if crawled else clean_text)
+    raw_path = vault / raw_rel
+    raw_path.write_text(
+        frontmatter({
+            "type": "raw-source",
+            "title": title,
+            "sourceUrl": record.get("sourceUrl"),
+            "captured": record.get("created"),
+            "capturePath": str(note_path.relative_to(vault)),
+            "openclawCaptureId": capture_id,
+        })
+        + f"\n\n# Raw Source: {title}\n\n"
+        + "## User Note\n\n"
+        + clean_text
+        + "\n\n"
+        + ("## Extracted Text\n\n" + source_text + "\n" if source_text else ""),
+        encoding="utf-8",
+    )
+
+    terms = top_terms(clean_text + "\n" + source_text)
+    source_path = vault / source_rel
+    source_path.write_text(
+        frontmatter({
+            "type": "wiki-source",
+            "title": title,
+            "sourceUrl": record.get("sourceUrl"),
+            "created": record.get("created"),
+            "tags": ["llm-wiki", "source", *[str(tag) for tag in record.get("tags", [])]],
+            "rawSource": raw_rel,
+            "capturePath": str(note_path.relative_to(vault)),
+        })
+        + f"\n\n# {title}\n\n"
+        + "## Source\n\n"
+        + f"- Capture: [[{str(note_path.relative_to(vault)).removesuffix('.md')}]]\n"
+        + f"- Raw source: [[{raw_rel.removesuffix('.md')}]]\n"
+        + (f"- URL: {record.get('sourceUrl')}\n" if record.get("sourceUrl") else "")
+        + "\n## Working Summary\n\n"
+        + short_summary(source_text or clean_text)
+        + "\n\n## Key Terms\n\n"
+        + ("\n".join(f"- [[wiki/concepts/{slugify(term)}|{term}]]" for term in terms) if terms else "- None detected yet.")
+        + "\n\n## Open Questions\n\n"
+        + "- What should this source update in the broader wiki?\n"
+        + "- Are there claims here that contradict existing pages?\n",
+        encoding="utf-8",
+    )
+
+    for tag in record.get("tags", []):
+        tag_text = str(tag)
+        if tag_text not in {"captured", "openclaw", "url", "web", "github", "inbox"}:
+            update_topic_page(vault, "projects", tag_text, source_rel.removesuffix(".md"), title)
+    for term in terms[:6]:
+        update_topic_page(vault, "concepts", term, source_rel.removesuffix(".md"), title)
+
+    append_wiki_log(vault, "ingest", title, source_rel)
+    update_wiki_index(vault)
+    return source_rel
+
+
 def strip_command(text: str) -> str:
     cleaned = re.sub(rf"^\s*/{OBSIDIAN_WORD_RE}(?:\s+|$)", "", text, flags=re.I).strip()
     crawl_suffix = r"(?:\s+and\s+(?:crawl|fetch|read)\s+it)?"
@@ -436,13 +713,14 @@ def capture(
         "crawled": bool(crawled),
         "preview": re.sub(r"\s+", " ", clean_text)[:240],
     }
+    record["wikiSourcePath"] = create_wiki_source(vault, record, clean_text, path, crawled)
     append_index(vault, record)
     return record
 
 
 def iter_markdown(vault: Path) -> Iterable[Path]:
-    user_memory_roots = set(TYPE_DIRS.values())
-    skip = {".obsidian", ".trash", "reports"}
+    user_memory_roots = set(TYPE_DIRS.values()) | {"wiki"}
+    skip = {".obsidian", ".trash"}
     system_pages = {"README.md", "index.md"}
     for path in vault.rglob("*.md"):
         rel_parts = path.relative_to(vault).parts
@@ -499,6 +777,113 @@ def search(query: str, limit: int = 8) -> list[dict[str, object]]:
     return sorted(results, key=lambda item: (-int(item["score"]), str(item["path"])))[:limit]
 
 
+def save_query(vault: Path, question: str, results: list[dict[str, object]]) -> str:
+    ensure_llm_wiki(vault)
+    query_id = note_id(question)
+    title = question[:80].strip() or "Question"
+    rel_path = f"wiki/questions/{query_id}-{slugify(title, 'question')}.md"
+    body = (
+        frontmatter({
+            "type": "wiki-question",
+            "title": title,
+            "created": iso_now(),
+            "tags": ["llm-wiki", "question"],
+        })
+        + f"\n\n# {title}\n\n"
+        + "## Question\n\n"
+        + question
+        + "\n\n## Retrieved Context\n\n"
+    )
+    if results:
+        body += "\n".join(
+            f"- [[{str(item['path']).removesuffix('.md')}]] (score {item['score']}): {str(item['excerpt']).replace('[[', '[').replace(']]', ']')}"
+            for item in results
+        )
+    else:
+        body += "- No matching wiki context found."
+    body += "\n\n## Durable Answer\n\nOpenClaw should write the final useful answer here when this question produces reusable knowledge.\n"
+    (vault / rel_path).write_text(body, encoding="utf-8")
+    append_wiki_log(vault, "query", title, rel_path)
+    update_wiki_index(vault)
+    return rel_path
+
+
+def parse_wikilinks(raw: str) -> list[str]:
+    links = []
+    for match in re.findall(r"\[\[([^\]]+)\]\]", raw):
+        target = match.split("|", 1)[0].strip()
+        if target:
+            links.append(target)
+    return links
+
+
+def lint_wiki(vault: Path) -> dict[str, object]:
+    ensure_llm_wiki(vault)
+    pages = sorted((vault / "wiki").rglob("*.md"))
+    rel_pages = {str(page.relative_to(vault)).removesuffix(".md") for page in pages}
+    inbound: dict[str, int] = {rel: 0 for rel in rel_pages}
+    missing_links: list[tuple[str, str]] = []
+
+    for page in pages:
+        rel = str(page.relative_to(vault)).removesuffix(".md")
+        raw = page.read_text(encoding="utf-8", errors="ignore")
+        for link in parse_wikilinks(raw):
+            normalized = link.removesuffix(".md")
+            if normalized in inbound:
+                inbound[normalized] += 1
+            elif normalized.startswith("wiki/"):
+                missing_links.append((rel, normalized))
+
+    orphan_pages = sorted(
+        rel
+        for rel, count in inbound.items()
+        if count == 0 and rel not in {"wiki/index", "wiki/log", "wiki/AGENTS"}
+    )
+    source_pages = sorted(str(page.relative_to(vault)).removesuffix(".md") for page in (vault / "wiki" / "sources").glob("*.md"))
+    concept_pages = sorted(str(page.relative_to(vault)).removesuffix(".md") for page in (vault / "wiki" / "concepts").glob("*.md"))
+
+    report_id = now_local().strftime("%Y%m%d-%H%M%S")
+    report_rel = f"wiki/reports/wiki-health-{report_id}.md"
+    report = (
+        frontmatter({
+            "type": "wiki-report",
+            "title": f"Wiki Health {report_id}",
+            "created": iso_now(),
+            "tags": ["llm-wiki", "report", "lint"],
+        })
+        + f"\n\n# Wiki Health {report_id}\n\n"
+        + "## Summary\n\n"
+        + f"- Wiki pages: {len(pages)}\n"
+        + f"- Source pages: {len(source_pages)}\n"
+        + f"- Concept pages: {len(concept_pages)}\n"
+        + f"- Orphan pages: {len(orphan_pages)}\n"
+        + f"- Missing wiki links: {len(missing_links)}\n\n"
+        + "## Orphan Pages\n\n"
+        + ("\n".join(f"- [[{rel}]]" for rel in orphan_pages[:100]) if orphan_pages else "- None detected.")
+        + "\n\n## Missing Wiki Links\n\n"
+        + (
+            "\n".join(f"- [[{source}]] -> missing `[[{target}]]`" for source, target in missing_links[:100])
+            if missing_links
+            else "- None detected."
+        )
+        + "\n\n## Suggested Maintenance\n\n"
+        + "- Ask OpenClaw to connect orphan pages to related concepts or sources.\n"
+        + "- Ask OpenClaw to turn repeated key terms into concept/entity pages.\n"
+        + "- Ask OpenClaw to file durable answers as synthesis pages.\n"
+    )
+    (vault / report_rel).write_text(report, encoding="utf-8")
+    append_wiki_log(vault, "lint", "Wiki health check", report_rel)
+    update_wiki_index(vault)
+    return {
+        "report": report_rel,
+        "pages": len(pages),
+        "sources": len(source_pages),
+        "concepts": len(concept_pages),
+        "orphans": len(orphan_pages),
+        "missingLinks": len(missing_links),
+    }
+
+
 def load_recent(limit: int = 10) -> list[dict[str, object]]:
     vault = vault_path()
     ensure_vault(vault)
@@ -535,7 +920,7 @@ def print_results(results: list[dict[str, object]], json_mode: bool) -> None:
 
 def cmd_init(_: argparse.Namespace) -> None:
     vault = vault_path()
-    ensure_vault(vault)
+    ensure_llm_wiki(vault)
     readme = vault / "README.md"
     if not readme.exists():
         readme.write_text(
@@ -578,6 +963,32 @@ def cmd_crawl(args: argparse.Namespace) -> None:
 def cmd_search(args: argparse.Namespace) -> None:
     query = " ".join(args.query).strip()
     print_results(search(query, limit=args.limit), args.json)
+
+
+def cmd_query(args: argparse.Namespace) -> None:
+    question = " ".join(args.question).strip()
+    vault = vault_path()
+    ensure_llm_wiki(vault)
+    results = search(question, limit=args.limit)
+    rel_path = save_query(vault, question, results)
+    if args.json:
+        print(json.dumps({"questionPath": rel_path, "results": results}, ensure_ascii=False, indent=2))
+        return
+    print(f"Filed query in Obsidian wiki: {rel_path}")
+    print_results(results, json_mode=False)
+
+
+def cmd_lint(args: argparse.Namespace) -> None:
+    report = lint_wiki(vault_path())
+    if args.json:
+        print(json.dumps(report, ensure_ascii=False, indent=2))
+        return
+    print(f"Wiki health report: {report['report']}")
+    print(f"Pages: {report['pages']}")
+    print(f"Sources: {report['sources']}")
+    print(f"Concepts: {report['concepts']}")
+    print(f"Orphans: {report['orphans']}")
+    print(f"Missing wiki links: {report['missingLinks']}")
 
 
 def cmd_recent(args: argparse.Namespace) -> None:
@@ -629,6 +1040,16 @@ def build_parser() -> argparse.ArgumentParser:
     search_p.add_argument("--limit", type=int, default=8)
     search_p.add_argument("--json", action="store_true")
     search_p.set_defaults(func=cmd_search)
+
+    query_p = sub.add_parser("query", help="Search the wiki and file the question for durable follow-up")
+    query_p.add_argument("question", nargs="+")
+    query_p.add_argument("--limit", type=int, default=8)
+    query_p.add_argument("--json", action="store_true")
+    query_p.set_defaults(func=cmd_query)
+
+    lint_p = sub.add_parser("lint", help="Create a wiki health report")
+    lint_p.add_argument("--json", action="store_true")
+    lint_p.set_defaults(func=cmd_lint)
 
     recent_p = sub.add_parser("recent", help="Show recent captures")
     recent_p.add_argument("--limit", type=int, default=10)

@@ -85,6 +85,21 @@ Upgrade later with:
 - daily/weekly summaries
 - project-level memory pages
 
+## LLM Wiki Layer
+
+The bridge now supports the LLM Wiki pattern:
+
+- `raw/sources/` stores immutable captured evidence.
+- `wiki/sources/` stores source summaries and key terms.
+- `wiki/concepts/`, `wiki/entities/`, and `wiki/projects/` store compiled knowledge.
+- `wiki/questions/` stores durable questions and retrieved context.
+- `wiki/syntheses/` is where OpenClaw should file useful answers.
+- `wiki/reports/` stores health checks.
+- `wiki/index.md` catalogs the wiki.
+- `wiki/log.md` records what happened over time.
+
+The important UX point is that the human does not need to say "ingest", "compile", or "lint". OpenClaw maps plain English onto those maintenance actions.
+
 ## Crawled Webpages
 
 When a URL is only saved as a link, the AI can remember that the link exists but may not know what the page said.

@@ -52,12 +52,40 @@ The bridge decides note type, tags, filename, and folder. It writes plain Markdo
 90-System/openclaw-memory-log.jsonl
 ```
 
+It also maintains an LLM Wiki layer:
+
+```text
+raw/sources/
+wiki/sources/
+wiki/concepts/
+wiki/projects/
+wiki/questions/
+wiki/reports/
+wiki/index.md
+wiki/log.md
+```
+
+The user should not need to know these commands. Map plain English to them internally:
+
+- "save this", "remember this", "add this to my Obsidian" -> `capture`
+- "what do I know about...", "find in my memory", "query my Obsidian" -> `query`
+- "organize my wiki", "update the wiki", "compile this into memory" -> use the captured/wiki pages and edit the relevant Markdown pages directly
+- "check my memory", "health check the wiki", "find missing links", "find contradictions/orphans" -> `lint`, then explain the report
+
+When a source is captured, the bridge creates a raw source and a wiki source page automatically. OpenClaw should then enrich the wiki if useful: update concept/entity/project pages, add cross-links, and write durable answers into `wiki/syntheses/`.
+
 ## Recall Contract
 
 If the user asks about saved notes, past work, links, articles, GitHub repos, project context, journal entries, or says phrases like `do you remember`, `what did I save`, `what was that repo`, `from my Obsidian`, or `from memory`, search the vault before answering:
 
 ```bash
 ~/.openclaw/tools/openclaw-obsidian search "<query>"
+```
+
+For broader memory questions, use:
+
+```bash
+~/.openclaw/tools/openclaw-obsidian query "<plain English question>"
 ```
 
 Use the search result paths and excerpts as evidence. If search returns nothing, say the Obsidian vault did not have a matching note.
@@ -67,3 +95,5 @@ Prefer saving user-provided memory exactly. Do not rewrite the user's pasted not
 ## Summary Contract
 
 If the user asks for a summary of a saved article or URL, search the vault first. If the crawled page text exists, summarize from the extracted text and cite the note path. If only a URL was saved and no crawled text exists, say that the vault has the link but not page contents yet, then offer to crawl it.
+
+If the answer is useful beyond the current chat, file it as a Markdown page under `wiki/syntheses/` and update `wiki/index.md` and `wiki/log.md`.
