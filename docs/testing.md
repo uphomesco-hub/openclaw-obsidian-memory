@@ -114,7 +114,34 @@ You should see notes in folders such as:
 06-Decisions/
 ```
 
-## 8. Check OpenClaw Memory Wiki
+## 8. Test Webpage Crawling
+
+Use a temporary vault if you do not want test notes in your real vault:
+
+```bash
+tmp_vault="$(mktemp -d)"
+OPENCLAW_OBSIDIAN_VAULT="$tmp_vault" openclaw-obsidian crawl "https://example.com" "crawler test"
+OPENCLAW_OBSIDIAN_VAULT="$tmp_vault" openclaw-obsidian search "Example Domain"
+rm -rf "$tmp_vault"
+```
+
+Expected: the saved note includes a `Crawled Page` section and an `Extracted Text` section.
+
+OpenClaw chat test:
+
+```text
+save this to Obsidian and crawl it: https://example.com crawler-chat-test-keyword
+```
+
+Then ask:
+
+```text
+summarize what I saved from example.com in Obsidian
+```
+
+Expected: OpenClaw searches the vault and summarizes from the extracted page text.
+
+## 9. Check OpenClaw Memory Wiki
 
 If using OpenClaw's bundled `memory-wiki` plugin:
 
@@ -130,4 +157,3 @@ Vault: ready
 Render mode: obsidian
 Wiki doctor: healthy
 ```
-

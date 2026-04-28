@@ -32,6 +32,20 @@ Do not ask where to put it. Run:
 ~/.openclaw/tools/openclaw-obsidian capture "<full user text>"
 ```
 
+If the user asks to crawl, fetch, read, summarize later, save page contents, save article contents, or says the link should be saved with context, use crawling:
+
+```bash
+~/.openclaw/tools/openclaw-obsidian capture --crawl "<full user text with URL>"
+```
+
+For an explicit URL-only crawl:
+
+```bash
+~/.openclaw/tools/openclaw-obsidian crawl "<url>" "<optional user note>"
+```
+
+The crawler stores readable page text in the note. It is intentionally bounded by timeout and size limits, so if a site blocks bots or requires login, say that the page could not be crawled and save the URL/note normally.
+
 The bridge decides note type, tags, filename, and folder. It writes plain Markdown into the Obsidian vault and logs captures to:
 
 ```text
@@ -49,3 +63,7 @@ If the user asks about saved notes, past work, links, articles, GitHub repos, pr
 Use the search result paths and excerpts as evidence. If search returns nothing, say the Obsidian vault did not have a matching note.
 
 Prefer saving user-provided memory exactly. Do not rewrite the user's pasted note into a different meaning.
+
+## Summary Contract
+
+If the user asks for a summary of a saved article or URL, search the vault first. If the crawled page text exists, summarize from the extracted text and cite the note path. If only a URL was saved and no crawled text exists, say that the vault has the link but not page contents yet, then offer to crawl it.

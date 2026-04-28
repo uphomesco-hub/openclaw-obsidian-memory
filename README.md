@@ -95,6 +95,18 @@ Search memory:
 ~/.openclaw/tools/openclaw-obsidian search "what did I save about browser automation"
 ```
 
+Crawl and save a webpage:
+
+```bash
+~/.openclaw/tools/openclaw-obsidian crawl "https://example.com/article" "why this article matters"
+```
+
+Or crawl the first URL in a normal capture:
+
+```bash
+~/.openclaw/tools/openclaw-obsidian capture --crawl "save this to Obsidian: https://example.com/article revisit later"
+```
+
 Show recent captures:
 
 ```bash
@@ -139,6 +151,14 @@ what did I save in Obsidian about blue-river-742?
 ```
 
 OpenClaw should search the vault and answer from the saved note.
+
+Webpage crawl test:
+
+```text
+save this to Obsidian and crawl it: https://example.com this page is for testing extraction
+```
+
+If OpenClaw follows the instruction file, it should run the bridge with `--crawl` or `crawl`, then later answer questions from the extracted page text.
 
 ## OpenClaw Memory Wiki
 

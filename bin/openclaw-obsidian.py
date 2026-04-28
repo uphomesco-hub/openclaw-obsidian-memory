@@ -11,11 +11,15 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import hashlib
+import html
+from html.parser import HTMLParser
 import json
 import os
 import re
 import sys
 import textwrap
+import urllib.error
+import urllib.request
 from pathlib import Path
 from typing import Iterable
 
@@ -23,6 +27,8 @@ from typing import Iterable
 DEFAULT_VAULT = Path.home() / "Documents" / "Obsidian-AI-Memory"
 SYSTEM_DIR = "90-System"
 INDEX_FILE = "openclaw-memory-log.jsonl"
+MAX_FETCH_BYTES = 2_000_000
+MAX_EXTRACTED_CHARS = 80_000
 
 TYPE_DIRS = {
     "journal": "01-Journal",
@@ -99,6 +105,152 @@ def yaml_list(values: Iterable[str]) -> str:
 
 def extract_urls(text: str) -> list[str]:
     return re.findall(r"https?://[^\s<>)\\\"]+", text)
+
+
+class ReadableHTMLParser(HTMLParser):
+    SKIP_TAGS = {"script", "style", "noscript", "svg", "canvas", "iframe", "template"}
+    BLOCK_TAGS = {
+        "article",
+        "aside",
+        "blockquote",
+        "br",
+        "dd",
+        "div",
+        "dl",
+        "dt",
+        "figcaption",
+        "footer",
+        "h1",
+        "h2",
+        "h3",
+        "h4",
+        "h5",
+        "h6",
+        "header",
+        "hr",
+        "li",
+        "main",
+        "nav",
+        "ol",
+        "p",
+        "pre",
+        "section",
+        "table",
+        "td",
+        "th",
+        "tr",
+        "ul",
+    }
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.title_parts: list[str] = []
+        self.meta_description: str | None = None
+        self.text_parts: list[str] = []
+        self._skip_depth = 0
+        self._in_title = False
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        tag = tag.lower()
+        attr_map = {key.lower(): value or "" for key, value in attrs}
+        if tag in self.SKIP_TAGS:
+            self._skip_depth += 1
+            return
+        if tag == "title":
+            self._in_title = True
+        if tag == "meta":
+            name = attr_map.get("name", "").lower()
+            prop = attr_map.get("property", "").lower()
+            if name == "description" or prop == "og:description":
+                content = attr_map.get("content", "").strip()
+                if content and not self.meta_description:
+                    self.meta_description = html.unescape(content)
+        if tag in self.BLOCK_TAGS and self._skip_depth == 0:
+            self.text_parts.append("\n")
+
+    def handle_endtag(self, tag: str) -> None:
+        tag = tag.lower()
+        if tag in self.SKIP_TAGS and self._skip_depth > 0:
+            self._skip_depth -= 1
+            return
+        if tag == "title":
+            self._in_title = False
+        if tag in self.BLOCK_TAGS and self._skip_depth == 0:
+            self.text_parts.append("\n")
+
+    def handle_data(self, data: str) -> None:
+        if self._skip_depth > 0:
+            return
+        cleaned = re.sub(r"\s+", " ", data).strip()
+        if not cleaned:
+            return
+        if self._in_title:
+            self.title_parts.append(cleaned)
+            return
+        self.text_parts.append(cleaned)
+        self.text_parts.append(" ")
+
+    @property
+    def title(self) -> str | None:
+        title = re.sub(r"\s+", " ", " ".join(self.title_parts)).strip()
+        return title or None
+
+    @property
+    def readable_text(self) -> str:
+        raw = "".join(self.text_parts)
+        lines = []
+        for line in raw.splitlines():
+            compact = re.sub(r"\s+", " ", line).strip()
+            if compact:
+                lines.append(compact)
+        return "\n\n".join(lines)
+
+
+def fetch_url(url: str, timeout: int = 20, max_bytes: int = MAX_FETCH_BYTES) -> dict[str, object]:
+    request = urllib.request.Request(
+        url,
+        headers={
+            "User-Agent": "openclaw-obsidian-memory/1.0 (+https://github.com/uphomesco-hub/openclaw-obsidian-memory)",
+            "Accept": "text/html,application/xhtml+xml,text/plain;q=0.9,*/*;q=0.1",
+        },
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            content_type = response.headers.get("Content-Type", "")
+            raw = response.read(max_bytes + 1)
+            truncated = len(raw) > max_bytes
+            raw = raw[:max_bytes]
+            charset = response.headers.get_content_charset() or "utf-8"
+            decoded = raw.decode(charset, errors="replace")
+            status = getattr(response, "status", None)
+    except urllib.error.HTTPError as exc:
+        raise SystemExit(f"URL fetch failed: HTTP {exc.code} for {url}") from exc
+    except urllib.error.URLError as exc:
+        raise SystemExit(f"URL fetch failed: {exc.reason}") from exc
+    except TimeoutError as exc:
+        raise SystemExit(f"URL fetch timed out after {timeout}s: {url}") from exc
+
+    if "html" in content_type.lower() or decoded.lstrip().lower().startswith(("<!doctype html", "<html")):
+        parser = ReadableHTMLParser()
+        parser.feed(decoded)
+        title = parser.title
+        description = parser.meta_description
+        text = parser.readable_text
+    else:
+        title = None
+        description = None
+        text = decoded
+
+    text = re.sub(r"\n{3,}", "\n\n", text).strip()
+    return {
+        "url": url,
+        "title": title,
+        "description": description,
+        "contentType": content_type,
+        "status": status,
+        "truncated": truncated or len(text) > MAX_EXTRACTED_CHARS,
+        "text": text[:MAX_EXTRACTED_CHARS],
+    }
 
 
 def classify(text: str, forced_type: str = "auto") -> tuple[str, list[str], str | None]:
@@ -182,11 +334,13 @@ def append_index(vault: Path, record: dict[str, object]) -> None:
 
 def strip_command(text: str) -> str:
     cleaned = re.sub(rf"^\s*/{OBSIDIAN_WORD_RE}(?:\s+|$)", "", text, flags=re.I).strip()
+    crawl_suffix = r"(?:\s+and\s+(?:crawl|fetch|read)\s+it)?"
     natural_patterns = [
-        rf"^\s*save\s+(?:(?:this|it)\s+)?(?:to|in)\s+{OBSIDIAN_WORD_RE}(?:\s+memory)?\s*[:,-]?\s*",
-        rf"^\s*add\s+(?:(?:this|it)\s+)?(?:to|in)\s+{OBSIDIAN_WORD_RE}(?:\s+memory)?\s*[:,-]?\s*",
-        rf"^\s*log\s+(?:(?:this|it)\s+)?(?:to|in)\s+{OBSIDIAN_WORD_RE}(?:\s+memory)?\s*[:,-]?\s*",
-        rf"^\s*remember\s+(?:(?:this|it)\s+)?(?:in|to)\s+{OBSIDIAN_WORD_RE}(?:\s+memory)?\s*[:,-]?\s*",
+        rf"^\s*save\s+(?:(?:this|it)\s+)?(?:to|in)\s+{OBSIDIAN_WORD_RE}(?:\s+memory)?{crawl_suffix}\s*[:,-]?\s*",
+        rf"^\s*add\s+(?:(?:this|it)\s+)?(?:to|in)\s+{OBSIDIAN_WORD_RE}(?:\s+memory)?{crawl_suffix}\s*[:,-]?\s*",
+        rf"^\s*log\s+(?:(?:this|it)\s+)?(?:to|in)\s+{OBSIDIAN_WORD_RE}(?:\s+memory)?{crawl_suffix}\s*[:,-]?\s*",
+        rf"^\s*remember\s+(?:(?:this|it)\s+)?(?:in|to)\s+{OBSIDIAN_WORD_RE}(?:\s+memory)?{crawl_suffix}\s*[:,-]?\s*",
+        rf"^\s*crawl\s+(?:(?:this|it)\s+)?(?:to|in)\s+{OBSIDIAN_WORD_RE}(?:\s+memory)?\s*[:,-]?\s*",
     ]
     for pattern in natural_patterns:
         updated = re.sub(pattern, "", cleaned, flags=re.I).strip()
@@ -195,7 +349,12 @@ def strip_command(text: str) -> str:
     return cleaned
 
 
-def capture(text: str, forced_type: str = "auto", source: str = "openclaw-chat") -> dict[str, object]:
+def capture(
+    text: str,
+    forced_type: str = "auto",
+    source: str = "openclaw-chat",
+    crawled: dict[str, object] | None = None,
+) -> dict[str, object]:
     vault = vault_path()
     ensure_vault(vault)
     clean_text = strip_command(text)
@@ -203,7 +362,9 @@ def capture(text: str, forced_type: str = "auto", source: str = "openclaw-chat")
         raise SystemExit("Nothing to capture after /obsidian.")
 
     kind, tags, source_url = classify(clean_text, forced_type)
-    title = derive_title(clean_text, kind, source_url)
+    title = str(crawled.get("title") or "") if crawled else ""
+    if not title:
+        title = derive_title(clean_text, kind, source_url)
     capture_id = note_id(clean_text)
 
     if kind == "journal":
@@ -233,6 +394,8 @@ def capture(text: str, forced_type: str = "auto", source: str = "openclaw-chat")
                 "title": title,
                 "source": source,
                 "sourceUrl": source_url,
+                "crawled": bool(crawled),
+                "contentType": crawled.get("contentType") if crawled else None,
                 "created": iso_now(),
                 "tags": tags,
                 "openclawCaptureId": capture_id,
@@ -241,6 +404,18 @@ def capture(text: str, forced_type: str = "auto", source: str = "openclaw-chat")
             + "## User Capture\n\n"
             + clean_text
             + "\n\n"
+            + (
+                "## Crawled Page\n\n"
+                + (f"- Description: {crawled.get('description')}\n" if crawled.get("description") else "")
+                + f"- HTTP status: {crawled.get('status')}\n"
+                + f"- Content type: {crawled.get('contentType') or 'unknown'}\n"
+                + f"- Truncated: {str(crawled.get('truncated')).lower()}\n\n"
+                + "## Extracted Text\n\n"
+                + str(crawled.get("text") or "No readable text extracted.")
+                + "\n\n"
+                if crawled
+                else ""
+            )
             + "## OpenClaw Catalog\n\n"
             + f"- Type: {kind}\n"
             + f"- Captured: {iso_now()}\n"
@@ -258,6 +433,7 @@ def capture(text: str, forced_type: str = "auto", source: str = "openclaw-chat")
         "source": source,
         "sourceUrl": source_url,
         "tags": tags,
+        "crawled": bool(crawled),
         "preview": re.sub(r"\s+", " ", clean_text)[:240],
     }
     append_index(vault, record)
@@ -375,7 +551,22 @@ def cmd_init(_: argparse.Namespace) -> None:
 
 def cmd_capture(args: argparse.Namespace) -> None:
     text = " ".join(args.text).strip() if args.text else sys.stdin.read().strip()
-    print_capture(capture(text, forced_type=args.type, source=args.source), args.json)
+    crawled = None
+    if args.crawl:
+        clean_text = strip_command(text)
+        urls = extract_urls(clean_text)
+        if not urls:
+            raise SystemExit("--crawl requires a URL in the captured text.")
+        crawled = fetch_url(urls[0], timeout=args.timeout)
+    print_capture(capture(text, forced_type=args.type, source=args.source, crawled=crawled), args.json)
+
+
+def cmd_crawl(args: argparse.Namespace) -> None:
+    url = args.url.strip()
+    note = " ".join(args.note).strip()
+    crawled = fetch_url(url, timeout=args.timeout)
+    capture_text = f"{url}\n\nUser note: {note}" if note else url
+    print_capture(capture(capture_text, forced_type=args.type, source=args.source, crawled=crawled), args.json)
 
 
 def cmd_search(args: argparse.Namespace) -> None:
@@ -412,8 +603,19 @@ def build_parser() -> argparse.ArgumentParser:
     cap_p.add_argument("text", nargs="*")
     cap_p.add_argument("--type", default="auto", choices=["auto", *TYPE_DIRS.keys()])
     cap_p.add_argument("--source", default="openclaw-chat")
+    cap_p.add_argument("--crawl", action="store_true", help="Fetch and store readable page text from the first URL")
+    cap_p.add_argument("--timeout", type=int, default=20, help="URL fetch timeout in seconds")
     cap_p.add_argument("--json", action="store_true")
     cap_p.set_defaults(func=cmd_capture)
+
+    crawl_p = sub.add_parser("crawl", help="Fetch a URL and save readable page text into Obsidian")
+    crawl_p.add_argument("url")
+    crawl_p.add_argument("note", nargs="*")
+    crawl_p.add_argument("--type", default="web", choices=["web", "github", "project", "inbox"])
+    crawl_p.add_argument("--source", default="openclaw-crawl")
+    crawl_p.add_argument("--timeout", type=int, default=20, help="URL fetch timeout in seconds")
+    crawl_p.add_argument("--json", action="store_true")
+    crawl_p.set_defaults(func=cmd_crawl)
 
     search_p = sub.add_parser("search", help="Search captured Obsidian memory")
     search_p.add_argument("query", nargs="+")

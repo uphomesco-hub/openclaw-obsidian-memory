@@ -85,3 +85,17 @@ Upgrade later with:
 - daily/weekly summaries
 - project-level memory pages
 
+## Crawled Webpages
+
+When a URL is only saved as a link, the AI can remember that the link exists but may not know what the page said.
+
+When the bridge crawls a page, it stores readable extracted text in the vault. Then OpenClaw can search and summarize that content later without re-fetching the website.
+
+This improves context, but it still has limits:
+
+- login-only pages may not be accessible
+- some sites block crawlers
+- JavaScript-heavy pages may expose little HTML text
+- very large pages are truncated by size limits
+
+For important pages, crawling plus a short user note is better than saving the URL alone.
