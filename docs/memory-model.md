@@ -89,7 +89,7 @@ Upgrade later with:
 
 When a URL is only saved as a link, the AI can remember that the link exists but may not know what the page said.
 
-When the bridge crawls a page, it stores readable extracted text in the vault. Then OpenClaw can search and summarize that content later without re-fetching the website.
+When the bridge sees a URL in an Obsidian capture, it tries to crawl the page and stores readable extracted text in the vault. Then OpenClaw can search and summarize that content later without re-fetching the website.
 
 This improves context, but it still has limits:
 

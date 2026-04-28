@@ -89,6 +89,8 @@ Capture memory:
 ~/.openclaw/tools/openclaw-obsidian capture "save this to Obsidian: remember this"
 ```
 
+If the captured text contains a URL, the bridge automatically tries to crawl and save readable page text.
+
 Search memory:
 
 ```bash
@@ -101,10 +103,16 @@ Crawl and save a webpage:
 ~/.openclaw/tools/openclaw-obsidian crawl "https://example.com/article" "why this article matters"
 ```
 
-Or crawl the first URL in a normal capture:
+Normal URL captures auto-crawl:
 
 ```bash
-~/.openclaw/tools/openclaw-obsidian capture --crawl "save this to Obsidian: https://example.com/article revisit later"
+~/.openclaw/tools/openclaw-obsidian capture "save this to Obsidian: https://example.com/article revisit later"
+```
+
+Disable crawling for URL-only storage:
+
+```bash
+~/.openclaw/tools/openclaw-obsidian capture --no-crawl "save this to Obsidian: https://example.com/article revisit later"
 ```
 
 Show recent captures:
@@ -152,13 +160,13 @@ what did I save in Obsidian about blue-river-742?
 
 OpenClaw should search the vault and answer from the saved note.
 
-Webpage crawl test:
+Webpage auto-crawl test:
 
 ```text
-save this to Obsidian and crawl it: https://example.com this page is for testing extraction
+save this to Obsidian: https://example.com this page is for testing extraction
 ```
 
-If OpenClaw follows the instruction file, it should run the bridge with `--crawl` or `crawl`, then later answer questions from the extracted page text.
+OpenClaw should save the URL and extracted page text, then later answer questions from that crawled content.
 
 ## OpenClaw Memory Wiki
 

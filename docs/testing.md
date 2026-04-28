@@ -130,7 +130,7 @@ Expected: the saved note includes a `Crawled Page` section and an `Extracted Tex
 OpenClaw chat test:
 
 ```text
-save this to Obsidian and crawl it: https://example.com crawler-chat-test-keyword
+save this to Obsidian: https://example.com crawler-chat-test-keyword
 ```
 
 Then ask:
@@ -140,6 +140,15 @@ summarize what I saved from example.com in Obsidian
 ```
 
 Expected: OpenClaw searches the vault and summarizes from the extracted page text.
+
+Regular capture also auto-crawls:
+
+```bash
+tmp_vault="$(mktemp -d)"
+OPENCLAW_OBSIDIAN_VAULT="$tmp_vault" openclaw-obsidian capture "save this to Obsidian: https://example.com auto-crawl-test"
+OPENCLAW_OBSIDIAN_VAULT="$tmp_vault" openclaw-obsidian search "Example Domain"
+rm -rf "$tmp_vault"
+```
 
 ## 9. Check OpenClaw Memory Wiki
 

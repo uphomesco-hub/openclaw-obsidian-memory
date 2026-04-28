@@ -552,12 +552,18 @@ def cmd_init(_: argparse.Namespace) -> None:
 def cmd_capture(args: argparse.Namespace) -> None:
     text = " ".join(args.text).strip() if args.text else sys.stdin.read().strip()
     crawled = None
-    if args.crawl:
-        clean_text = strip_command(text)
-        urls = extract_urls(clean_text)
-        if not urls:
-            raise SystemExit("--crawl requires a URL in the captured text.")
-        crawled = fetch_url(urls[0], timeout=args.timeout)
+    clean_text = strip_command(text)
+    urls = extract_urls(clean_text)
+    should_crawl = bool(urls) and not args.no_crawl
+    if should_crawl:
+        try:
+            crawled = fetch_url(urls[0], timeout=args.timeout)
+        except SystemExit:
+            if args.crawl:
+                raise
+            print(f"Warning: could not crawl {urls[0]}; saving URL only.", file=sys.stderr)
+    elif args.crawl and not urls:
+        raise SystemExit("--crawl requires a URL in the captured text.")
     print_capture(capture(text, forced_type=args.type, source=args.source, crawled=crawled), args.json)
 
 
@@ -603,7 +609,8 @@ def build_parser() -> argparse.ArgumentParser:
     cap_p.add_argument("text", nargs="*")
     cap_p.add_argument("--type", default="auto", choices=["auto", *TYPE_DIRS.keys()])
     cap_p.add_argument("--source", default="openclaw-chat")
-    cap_p.add_argument("--crawl", action="store_true", help="Fetch and store readable page text from the first URL")
+    cap_p.add_argument("--crawl", action="store_true", help="Require crawling the first URL before saving")
+    cap_p.add_argument("--no-crawl", action="store_true", help="Do not auto-crawl URLs in captured text")
     cap_p.add_argument("--timeout", type=int, default=20, help="URL fetch timeout in seconds")
     cap_p.add_argument("--json", action="store_true")
     cap_p.set_defaults(func=cmd_capture)
@@ -642,7 +649,16 @@ def main() -> int:
 
     # Convenience: allow `openclaw-obsidian /obsidian pasted text`.
     if sys.argv[1].lower() in {"/obsidian", "/obsedian"}:
-        record = capture(" ".join(sys.argv[1:]))
+        text = " ".join(sys.argv[1:])
+        clean_text = strip_command(text)
+        crawled = None
+        urls = extract_urls(clean_text)
+        if urls:
+            try:
+                crawled = fetch_url(urls[0])
+            except SystemExit:
+                print(f"Warning: could not crawl {urls[0]}; saving URL only.", file=sys.stderr)
+        record = capture(text, crawled=crawled)
         print_capture(record, json_mode=False)
         return 0
 

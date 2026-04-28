@@ -32,10 +32,10 @@ Do not ask where to put it. Run:
 ~/.openclaw/tools/openclaw-obsidian capture "<full user text>"
 ```
 
-If the user asks to crawl, fetch, read, summarize later, save page contents, save article contents, or says the link should be saved with context, use crawling:
+If the captured text contains a URL, the bridge automatically tries to crawl the first URL and save readable page text. The user does not need to say "crawl it".
 
 ```bash
-~/.openclaw/tools/openclaw-obsidian capture --crawl "<full user text with URL>"
+~/.openclaw/tools/openclaw-obsidian capture "<full user text with URL>"
 ```
 
 For an explicit URL-only crawl:
@@ -44,7 +44,7 @@ For an explicit URL-only crawl:
 ~/.openclaw/tools/openclaw-obsidian crawl "<url>" "<optional user note>"
 ```
 
-The crawler stores readable page text in the note. It is intentionally bounded by timeout and size limits, so if a site blocks bots or requires login, say that the page could not be crawled and save the URL/note normally.
+The crawler stores readable page text in the note. It is intentionally bounded by timeout and size limits, so if a site blocks bots or requires login, say that the page could not be crawled and save the URL/note normally. Use `--no-crawl` only when the user explicitly wants URL-only storage.
 
 The bridge decides note type, tags, filename, and folder. It writes plain Markdown into the Obsidian vault and logs captures to:
 
