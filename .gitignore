@@ -1,0 +1,14 @@
+.DS_Store
+*.pyc
+__pycache__/
+.venv/
+venv/
+node_modules/
+
+# Do not commit a live personal vault or generated state.
+Obsidian-AI-Memory/
+vault/
+logs/
+state/
+*.jsonl
+
