@@ -12,6 +12,27 @@ Use the local bridge:
 ~/.openclaw/tools/openclaw-obsidian
 ```
 
+## Memory Philosophy
+
+Use this vault as recall-based long-term memory, not as a giant prompt.
+
+Do not load the whole vault, all daily notes, or every old decision into normal conversation. Talk naturally from the current chat context. Search Obsidian only when the user asks for memory or when the task clearly depends on prior context.
+
+Working rule:
+
+- current chat = working memory
+- Obsidian notes/wiki = long-term memory
+- `search`/`query` = recall
+
+Recall from Obsidian when:
+
+- the user says `do you remember`, `what did we decide`, `what did I save`, `from memory`, or `from my Obsidian`
+- the user asks about saved notes, links, articles, GitHub repos, journal entries, project context, people, or prior work
+- the task depends on a prior preference, decision, repo state, playbook, or project convention
+- answering without recall would be a guess about the user's past context
+
+If nothing indicates prior context is needed, do not search just to stuff more memory into the reply.
+
 ## Capture Contract
 
 If the user message starts with `/obsidian` or `/obsedian`, treat the rest of the message as memory to save.

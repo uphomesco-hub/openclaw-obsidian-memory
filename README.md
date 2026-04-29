@@ -10,6 +10,29 @@ It gives OpenClaw two simple abilities:
 
 The vault stays normal Markdown. You can open it in Obsidian, sync it, edit it manually, or back it up like any other folder.
 
+## Recall-Based Memory Architecture
+
+This project treats memory more like a human brain than a giant prompt.
+
+The assistant should not load the whole vault, all old chats, or every past decision into every conversation. Normal chat should use small working memory: the current message, the current task, and only the recent context needed to reply naturally.
+
+Long-term memory lives in Obsidian. OpenClaw should recall from it only when memory is actually needed:
+
+- the user asks "do you remember...", "what did we decide...", "what did I save...", or "continue from last time"
+- the task depends on a prior project, repo, decision, preference, person, article, saved link, or old note
+- the user asks about their own saved knowledge: "what do I know about..."
+- the answer would otherwise be based on a guess about past context
+
+In this model:
+
+- current chat = working memory
+- raw notes and daily logs = experiences
+- curated Markdown/wiki pages = long-term memory
+- search/query = recall
+- links, tags, and summaries = associations
+
+The goal is not to make an AI that re-sends all context forever. The goal is to make an agent that can talk forward, forget irrelevant details, and deliberately retrieve the right memory when asked or when the task clearly needs it.
+
 ## What This Does
 
 When you tell OpenClaw:

@@ -2,6 +2,34 @@
 
 Obsidian memory works well for AI because it gives the AI a durable, readable, searchable memory store. It is not automatically magic vector memory.
 
+## Recall-Based Memory
+
+The core design is recall-based memory.
+
+A human conversation does not replay a whole life history before every sentence. People talk from short-term working memory, then deliberately recall long-term memory when something asks for it.
+
+Use the same pattern for OpenClaw:
+
+- Current chat is working memory.
+- Obsidian is long-term memory.
+- Search/query is recall.
+- Wiki pages and links are associations.
+
+Avoid this pattern:
+
+```text
+Every turn -> load all notes -> answer.
+```
+
+Prefer this pattern:
+
+```text
+Normal turn -> answer from current context.
+Memory turn -> search/query Obsidian -> answer from focused excerpts.
+```
+
+This keeps responses faster, cheaper, more private, and more human. It also reduces false confidence because the assistant retrieves evidence only when prior context matters.
+
 ## Obsidian Graph
 
 Obsidian's graph comes from Markdown structure:
