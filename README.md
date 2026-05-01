@@ -14,6 +14,8 @@ The vault stays normal Markdown. You can open it in Obsidian, sync it, edit it m
 
 This project treats memory more like a human brain than a giant prompt.
 
+![Human-like AI memory architecture](assets/human-like-ai-memory.png)
+
 The assistant should not load the whole vault, all old chats, or every past decision into every conversation. Normal chat should use small working memory: the current message, the current task, and only the recent context needed to reply naturally.
 
 Long-term memory lives in Obsidian. OpenClaw should recall from it only when memory is actually needed:
@@ -74,6 +76,50 @@ The assistant should not do a memory lookup for universal or self-contained requ
 - "answer this general question that does not depend on my past context"
 
 That is the core behavior: direct action for straight tasks, deliberate recall for context-heavy tasks.
+
+### Example: Normal AI Chat vs Human-Like Memory Chat
+
+Most AI assistants keep continuity by replaying the whole conversation. That makes the model sound like it remembers, but the memory is really just a long prompt.
+
+```text
+User:
+Remember that "desk light" means the smart plug beside my monitor.
+
+Normal AI:
+Stores that only inside the current chat transcript.
+
+Later, in the same long chat:
+User:
+Turn off the desk light.
+
+Normal AI:
+Can answer only if the earlier alias message is still inside the context window.
+```
+
+That breaks when the session gets reset, compacted, routed through another channel, or starts fresh.
+
+This repo is built for a different behavior:
+
+```text
+User:
+Remember that "desk light" means the smart plug beside my monitor.
+
+Memory-first OpenClaw:
+Saves that mapping into Obsidian.
+
+Later, in any fresh chat:
+User:
+Turn off the desk light.
+
+Memory-first OpenClaw:
+Recognizes "desk light" as a personal alias.
+Searches Obsidian.
+Finds the saved mapping.
+Uses the right local tool.
+Writes the outcome back if it matters.
+```
+
+That is the human-like part. Humans do not replay every sentence from every old conversation before replying. They keep the current conversation small, recognize when something needs memory, recall the relevant fact, and continue naturally.
 
 ## OpenClaw Setup For Fresh Chats
 
