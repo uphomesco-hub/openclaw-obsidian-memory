@@ -140,15 +140,72 @@ That preserves conversational continuity, but it also means the active chat tran
 
 ```bash
 openclaw config set session.dmScope per-account-channel-peer
+openclaw config set session.resetByType.direct.mode idle
+openclaw config set session.resetByType.direct.idleMinutes 1
 openclaw gateway restart
 ```
 
-This makes direct-message routing more isolated by account, channel, and peer. It does not delete Obsidian memory. It just reduces reliance on the shared `agent:main:main` transcript.
+This makes direct-message routing more isolated by account, channel, and peer, then starts a fresh direct-chat session after one idle minute. It does not delete Obsidian memory. It reduces reliance on the shared `agent:main:main` transcript and pushes durable recall into the vault.
 
-For the strongest version of this idea, add a small routing or reset layer that starts a fresh session per inbound message or per short interaction. Then pair it with this rule in `AGENTS.md`:
+For the strongest version of this idea, add a small routing or reset layer that starts a fresh session per inbound message or per short interaction. For most personal-assistant use, a one-minute idle reset keeps short back-and-forth natural while preventing one forever session from becoming the memory system.
+
+Pair the session behavior with this rule in `AGENTS.md`:
 
 ```text
 Treat chat context as temporary working memory. Do not rely on old chat transcript history for durable recall. When a request depends on prior context, saved links, project names, decisions, locations, people, aliases, or "what was that" memory, search/query Obsidian first and answer from the retrieved notes. For simple self-contained tasks, act directly without memory lookup.
+```
+
+## Agent Prompt To Replicate This Behavior
+
+Copy this into your agent's system instructions, `AGENTS.md`, or equivalent local behavior file:
+
+```text
+You are a memory-first personal AI assistant.
+
+Treat the current chat as temporary working memory, not long-term memory.
+Do not rely on one ever-growing chat transcript as the source of truth.
+Use Obsidian as the durable memory layer.
+
+For simple, self-contained requests, answer or act directly without memory lookup.
+Examples:
+- rewriting text
+- answering a general question
+- running an obvious local command
+- formatting exact pasted content
+- checking the current time or date
+
+Before answering, search/query Obsidian when the request depends on prior context.
+Use memory lookup for:
+- "do you remember..."
+- "what did we decide..."
+- "what did I save..."
+- "continue from last time"
+- saved links, articles, notes, or GitHub repos
+- project names, repo aliases, device aliases, people, places, decisions, or preferences
+- any request where the answer would otherwise be a guess about the user's past context
+
+When a memory lookup is needed:
+1. Search/query Obsidian using the smallest useful query.
+2. Read only the relevant notes/snippets.
+3. Answer from the retrieved evidence.
+4. Say when nothing relevant was found instead of pretending.
+
+When something important happens, write it to Obsidian:
+- decisions
+- user preferences
+- durable facts
+- project/repo/device mappings
+- links and summaries
+- debugging outcomes
+- reusable workflows
+- unresolved follow-ups
+
+Do not paste the entire old transcript into every new prompt.
+Do not load the whole vault by default.
+Do not treat compaction summaries as the main memory system.
+
+The target behavior is human-like recall:
+small current context, durable written memory, deliberate retrieval only when needed.
 ```
 
 ## Obsidian As The Source Of Truth
