@@ -33,6 +33,106 @@ In this model:
 
 The goal is not to make an AI that re-sends all context forever. The goal is to make an agent that can talk forward, forget irrelevant details, and deliberately retrieve the right memory when asked or when the task clearly needs it.
 
+## Human-Like Conversation Mode
+
+Most AI chat systems create continuity by sending the full conversation history back to the model on every turn. That works for short chats, but it is not how human memory works, and it breaks down over long-running assistants:
+
+- the context window becomes the real memory
+- old irrelevant messages keep influencing new answers
+- private or stale details are replayed when they are not needed
+- long sessions get slower, more expensive, and harder to reason about
+- the assistant can appear to "remember" things only because the whole transcript was resent
+
+This add-on is designed for a different pattern:
+
+```text
+Every new chat turn starts small.
+The assistant answers simple tasks directly.
+When recall is needed, it searches Obsidian.
+Only the relevant notes/snippets are brought back into the answer.
+New important events are written back to Obsidian.
+```
+
+In other words, each chat can be treated as a fresh working-memory moment. The durable brain is the Obsidian vault, not the current model context window.
+
+The assistant should use a memory lookup when the user asks about:
+
+- where something was saved
+- what a project/repo/device/person refers to
+- what happened before
+- what was decided
+- what was captured from a link or article
+- how to continue prior work
+- user-specific aliases such as a local device name, repo nickname, or standing agreement
+
+The assistant should not do a memory lookup for universal or self-contained requests:
+
+- "what time is it?"
+- "rewrite this sentence"
+- "turn this exact text into bullets"
+- "run this obvious local command"
+- "answer this general question that does not depend on my past context"
+
+That is the core behavior: direct action for straight tasks, deliberate recall for context-heavy tasks.
+
+## OpenClaw Setup For Fresh Chats
+
+OpenClaw has two separate pieces that are easy to confuse:
+
+- **session transcript**: the active chat history OpenClaw can replay to the model
+- **Obsidian memory**: durable Markdown memory that the assistant retrieves with tools
+
+For a human-like memory setup, avoid making one forever-growing direct-message session the main brain.
+
+OpenClaw direct messages commonly default to the shared main session:
+
+```text
+agent:main:main
+```
+
+That preserves conversational continuity, but it also means the active chat transcript can become the hidden memory. To make direct chats more isolated, configure DM session scoping away from `main`:
+
+```bash
+openclaw config set session.dmScope per-account-channel-peer
+openclaw gateway restart
+```
+
+This makes direct-message routing more isolated by account, channel, and peer. It does not delete Obsidian memory. It just reduces reliance on the shared `agent:main:main` transcript.
+
+For the strongest version of this idea, add a small routing or reset layer that starts a fresh session per inbound message or per short interaction. Then pair it with this rule in `AGENTS.md`:
+
+```text
+Treat chat context as temporary working memory. Do not rely on old chat transcript history for durable recall. When a request depends on prior context, saved links, project names, decisions, locations, people, aliases, or "what was that" memory, search/query Obsidian first and answer from the retrieved notes. For simple self-contained tasks, act directly without memory lookup.
+```
+
+## Obsidian As The Source Of Truth
+
+To make this work, the assistant must also write things down. Memory that is only in a model context window disappears or gets distorted.
+
+Useful things to save:
+
+- meaningful user asks
+- important assistant outcomes
+- decisions and preferences
+- project/repo/device mappings
+- links and crawled article text
+- debugging lessons
+- reusable workflows
+
+This repo's bridge handles that by writing normal Markdown into the vault and maintaining a machine-readable log at:
+
+```text
+90-System/openclaw-memory-log.jsonl
+```
+
+A practical OpenClaw setup can also sync the direct Telegram transcript into Obsidian, for example:
+
+```text
+90-System/OpenClaw Telegram Transcript/YYYY-MM-DD.md
+```
+
+That transcript is not meant to be blindly pasted back into every prompt. It is evidence that can be searched when the user asks for recall.
+
 ## What This Does
 
 When you tell OpenClaw:
